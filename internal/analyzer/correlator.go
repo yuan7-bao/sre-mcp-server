@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zhujiaqii/sre-mcp-server/internal/tools"
+	"github.com/3490165738/sre-mcp-server/internal/tools"
 )
 
 type Correlator struct {
@@ -74,7 +74,7 @@ func (c *Correlator) Correlate(ctx context.Context, params map[string]any) (stri
 		// Find logs within ±2 minutes of anomaly
 		var nearbyLogs []tools.LogEntry
 		for _, log := range logs {
-					// Simple time proximity check
+			// Simple time proximity check
 			logTime := log.Timestamp
 			anomTime := points[0].Timestamp // placeholder
 			for _, p := range points {

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/zhujiaqii/sre-mcp-server/internal/tools"
+	"github.com/3490165738/sre-mcp-server/internal/tools"
 )
 
 type AnomalyDetector struct {

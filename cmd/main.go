@@ -2,12 +2,13 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 
-	"github.com/zhujiaqii/sre-mcp-server/internal/server"
-	"github.com/zhujiaqii/sre-mcp-server/internal/tools"
-	"github.com/zhujiaqii/sre-mcp-server/internal/analyzer"
+	"github.com/3490165738/sre-mcp-server/internal/server"
+	"github.com/3490165738/sre-mcp-server/internal/tools"
+	"github.com/3490165738/sre-mcp-server/internal/analyzer"
 )
 
 var (

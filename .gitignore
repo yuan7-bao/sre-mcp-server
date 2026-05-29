@@ -1,0 +1,29 @@
+# Binary
+sre-mcp-server
+sre-mcp-server.exe
+
+# Go
+vendor/
+*.test
+*.out
+coverage.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+prometheus-data/
+grafana-data/
+loki-data/
+
+# Temp
+*.tmp
+*.log
+photo_*.png

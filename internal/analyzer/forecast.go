@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zhujiaqii/sre-mcp-server/internal/tools"
+	"github.com/3490165738/sre-mcp-server/internal/tools"
 )
 
 type Forecaster struct {
@@ -56,7 +56,7 @@ func (f *Forecaster) Forecast(ctx context.Context, params map[string]any) (strin
 	// Current value
 	currentHours := points[len(points)-1].Timestamp.Sub(t0).Hours()
 	currentValue := ys[len(ys)-1]
-	
+
 	// Predict when threshold will be hit
 	var hitTime time.Time
 	var hoursUntilHit float64

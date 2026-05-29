@@ -1,118 +1,137 @@
+<div align="center">
+
 # 🔭 SRE-MCP-Server
 
-> 一个连接 Prometheus / Grafana / Loki 的 MCP Server，让 Claude 直接查询监控指标、分析告警、智能定位根因。
+**让 Claude 直接查询 Prometheus / Grafana / Loki，用自然语言做 SRE 监控与故障诊断。**
 
-## 项目定位
+基于 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 构建，Go 语言实现。
 
-这不是一个玩具 demo —— 它是一个**可以写进简历的 AIOps 实战项目**，面向字节跳动 SRE 岗位的技术面试。
+[![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![MCP](https://img.shields.io/badge/MCP-2024--11--05-blueviolet)](https://modelcontextprotocol.io/)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
 
-## 架构总览
+</div>
+
+---
+
+## 这是什么？
+
+一个 MCP Server，把 SRE 日常用的监控系统暴露给大语言模型（Claude），实现：
+
+- 🗣️ **自然语言查监控** — "当前 CPU 使用率多少？" → 自动转 PromQL 查询
+- 📊 **智能异常检测** — 基于 Z-score / 3-sigma / IQR 的时序异常识别
+- 🔗 **信号关联分析** — Metrics 异常 + Error Logs 自动做时间窗口关联
+- 🎯 **智能根因推荐** — 输入症状描述，自动跑多维诊断，按置信度排序
+- 📈 **容量趋势预测** — 线性回归预测资源何时打爆阈值
+
+## 架构
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Claude Desktop / Code                 │
-│                     (MCP Host / Client)                  │
-└──────────────────────┬──────────────────────────────────┘
-                       │ JSON-RPC 2.0 (stdio / Streamable HTTP)
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│                   SRE-MCP-Server (Go)                    │
-│                                                          │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐ │
-│  │Prometheus│  │  Grafana  │  │   Loki   │  │   AI    │ │
-│  │  Tools   │  │  Tools   │  │  Tools   │  │Analyzer │ │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬────┘ │
-│       │              │              │              │      │
-└───────┼──────────────┼──────────────┼──────────────┼──────┘
-        ▼              ▼              ▼              ▼
-  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
-  │Prometheus│  │ Grafana  │  │   Loki   │  │  本地    │
-  │  :9090   │  │  :3000   │  │  :3100   │  │ 异常检测 │
-  └──────────┘  └──────────┘  └──────────┘  └──────────┘
+┌─────────────────────────────────────────────────┐
+│           Claude Desktop / Claude Code           │
+│                 (MCP Host)                       │
+└────────────────────┬────────────────────────────┘
+                     │ JSON-RPC 2.0 (stdio)
+                     ▼
+┌─────────────────────────────────────────────────┐
+│              SRE-MCP-Server (Go)                 │
+│                                                  │
+│  ┌────────────┐ ┌──────────┐ ┌───────────────┐  │
+│  │ Prometheus │ │ Grafana  │ │     Loki      │  │
+│  │   Tools    │ │  Tools   │ │    Tools      │  │
+│  │  (6 个)    │ │ (4 个)   │ │   (4 个)      │  │
+│  └─────┬──────┘ └────┬─────┘ └──────┬────────┘  │
+│        │             │              │            │
+│  ┌─────┴─────────────┴──────────────┴─────────┐  │
+│  │          AI Analyzer (4 个)                 │  │
+│  │  异常检测 · 信号关联 · 根因分析 · 容量预测    │  │
+│  └────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────┘
+         │              │              │
+    Prometheus       Grafana         Loki
+     :9090           :3000          :3100
 ```
 
-## 暴露的 MCP Tools（18 个）
+## 18 个 MCP Tools
 
-### Prometheus 指标查询（6 个）
+### Prometheus 查询（6 个）
 | Tool | 功能 |
 |------|------|
-| `promql_instant` | 即时查询（当前值） |
-| `promql_range` | 范围查询（时间序列） |
-| `prom_targets` | 查看监控目标状态 |
-| `prom_alerts` | 获取当前告警 |
-| `prom_metadata` | 指标元数据查询 |
-| `prom_label_values` | 标签值枚举 |
+| `promql_instant` | 即时查询 — 获取指标当前值 |
+| `promql_range` | 范围查询 — 获取时间序列数据 |
+| `prom_targets` | 查看所有监控目标及健康状态 |
+| `prom_alerts` | 获取当前触发的告警 |
+| `prom_metadata` | 查询指标元数据（类型/含义） |
+| `prom_label_values` | 枚举标签值（发现服务/实例） |
 
-### Grafana Dashboard（4 个）
+### Grafana 看板（4 个）
 | Tool | 功能 |
 |------|------|
 | `grafana_dashboards` | 列出所有 Dashboard |
-| `grafana_dashboard_detail` | 获取 Dashboard 配置 |
-| `grafana_annotations` | 查询事件标注 |
-| `grafana_alerts` | Grafana 告警规则状态 |
+| `grafana_dashboard_detail` | 获取 Dashboard 面板与查询详情 |
+| `grafana_annotations` | 查询事件标注（部署/变更/事故） |
+| `grafana_alerts` | Grafana 告警规则与状态 |
 
-### Loki 日志查询（4 个）
+### Loki 日志（4 个）
 | Tool | 功能 |
 |------|------|
 | `loki_query` | LogQL 日志查询 |
 | `loki_labels` | 日志标签枚举 |
 | `loki_series` | 日志流发现 |
-| `loki_tail` | 实时日志尾随 |
+| `loki_stats` | 日志量统计 |
 
 ### AI 智能分析（4 个）
 | Tool | 功能 |
 |------|------|
-| `analyze_anomaly` | 时序异常检测（3-sigma / Z-score） |
-| `correlate_signals` | Metrics-Logs-Traces 关联分析 |
-| `rca_suggest` | 智能根因推荐 |
+| `analyze_anomaly` | 时序异常检测（Z-score / 3-sigma / IQR） |
+| `correlate_signals` | Metrics-Logs 跨信号关联分析 |
+| `rca_suggest` | 智能根因推荐（自动多维诊断） |
 | `capacity_forecast` | 容量趋势预测（线性回归） |
 
 ## 快速开始
 
-### 1. 前置条件
+### 前置条件
+
+- Go 1.21+
+- Docker & Docker Compose
+- [Claude Desktop](https://claude.ai/download)
+
+### 1. 启动监控栈
 
 ```bash
-# 需要 Go 1.21+, Docker, Docker Compose
-go version   # >= 1.21
-docker --version
-```
-
-### 2. 一键启动监控栈
-
-```bash
-# 启动 Prometheus + Grafana + Loki + Node Exporter
+git clone https://github.com/3490165738/sre-mcp-server.git
+cd sre-mcp-server
 docker compose -f configs/docker-compose.yml up -d
-
-# 验证
-curl http://localhost:9090/-/healthy     # Prometheus
-curl http://localhost:3000/api/health     # Grafana
-curl http://localhost:3100/ready          # Loki
 ```
 
-### 3. 编译 & 运行 MCP Server
+验证服务：
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000 (admin/admin)
+- Loki: http://localhost:3100/ready
+
+### 2. 编译
 
 ```bash
-go build -o sre-mcp-server ./cmd/
-./sre-mcp-server --prometheus-url http://localhost:9090 \
-                 --grafana-url http://localhost:3000 \
-                 --grafana-api-key YOUR_KEY \
-                 --loki-url http://localhost:3100
+go mod tidy
+go build -o sre-mcp-server.exe ./cmd/   # Windows
+go build -o sre-mcp-server ./cmd/       # macOS / Linux
 ```
 
-### 4. 接入 Claude Desktop
+### 3. 接入 Claude Desktop
 
-编辑 `~/Library/Application Support/Claude/claude_desktop_config.json`（macOS）
-或 `%APPDATA%\Claude\claude_desktop_config.json`（Windows）：
+编辑 Claude Desktop 配置（Settings → Developer → Edit Config）：
 
 ```json
 {
   "mcpServers": {
     "sre-monitor": {
-      "command": "/path/to/sre-mcp-server",
+      "command": "C:\\path\\to\\sre-mcp-server.exe",
       "args": [
         "--prometheus-url", "http://localhost:9090",
         "--grafana-url", "http://localhost:3000",
-        "--grafana-api-key", "YOUR_GRAFANA_API_KEY",
+        "--grafana-api-key", "",
         "--loki-url", "http://localhost:3100"
       ]
     }
@@ -120,54 +139,72 @@ go build -o sre-mcp-server ./cmd/
 }
 ```
 
-重启 Claude Desktop，你就能直接对 Claude 说：
+重启 Claude Desktop，开始对话：
 
-- "当前有哪些告警在触发？"
-- "查一下过去1小时 CPU 使用率最高的5个节点"
-- "分析一下 order-service 的延迟为什么升高了"
-- "预测一下磁盘空间什么时候会满"
+```
+💬 "当前有哪些监控目标？"
+💬 "查一下过去1小时的 HTTP 请求量趋势"  
+💬 "分析一下 order-service 为什么延迟升高了"
+💬 "预测磁盘什么时候会满"
+```
+
+### 4. 模拟故障（可选）
+
+```bash
+chmod +x scripts/load-generator.sh
+./scripts/load-generator.sh spike    # 流量尖峰
+./scripts/load-generator.sh errors   # 错误注入
+./scripts/load-generator.sh chaos    # 混合故障
+```
 
 ## 项目结构
 
 ```
 sre-mcp-server/
 ├── cmd/
-│   └── main.go              # 入口：解析参数、注册 tools、启动 MCP
+│   └── main.go                  # 入口：参数解析、Tool 注册、启动 MCP
 ├── internal/
 │   ├── server/
-│   │   └── mcp.go           # MCP Server 核心（JSON-RPC handler）
+│   │   └── mcp.go               # MCP Server 核心（JSON-RPC 2.0）
 │   ├── tools/
-│   │   ├── prometheus.go    # Prometheus 查询工具
-│   │   ├── grafana.go       # Grafana API 工具
-│   │   └── loki.go          # Loki 日志工具
+│   │   ├── prometheus.go        # Prometheus HTTP API 封装
+│   │   ├── grafana.go           # Grafana API 封装
+│   │   └── loki.go              # Loki API 封装
 │   └── analyzer/
-│       ├── anomaly.go       # 异常检测算法
-│       ├── correlator.go    # 信号关联
-│       ├── rca.go           # 根因分析
-│       └── forecast.go      # 容量预测
+│       ├── anomaly.go           # 异常检测（Z-score / 3-sigma / IQR）
+│       ├── correlator.go        # Metrics-Logs 信号关联
+│       ├── rca.go               # 智能根因分析
+│       └── forecast.go          # 容量预测（线性回归）
 ├── configs/
-│   ├── docker-compose.yml   # 一键启动监控栈
-│   ├── prometheus.yml       # Prometheus 配置
-│   └── alerting-rules.yml   # 告警规则
+│   ├── docker-compose.yml       # 一键启动监控栈
+│   ├── prometheus.yml           # Prometheus 采集配置
+│   └── alerting-rules.yml       # 告警规则
 ├── scripts/
-│   └── load-generator.sh    # 模拟负载（用于演示/测试）
+│   └── load-generator.sh        # 故障模拟脚本
 ├── go.mod
-├── go.sum
 └── README.md
 ```
 
-## 简历怎么写
+## 技术选型
 
-```
-SRE 智能监控 MCP Server                              个人项目 · 2026.xx
-• 基于 MCP（Model Context Protocol）开发 Go 语言 SRE 监控服务，
-  暴露 18 个 MCP Tools 连接 Prometheus / Grafana / Loki，实现
-  LLM 对监控数据的自然语言查询与智能分析
-• 实现时序异常检测（3-sigma / Z-score）、Metrics-Logs 关联分析、
-  基于拓扑的智能根因推荐、线性回归容量预测等 AIOps 能力
-• 支持 stdio 与 Streamable HTTP 双传输模式，集成 Claude Desktop / 
-  Claude Code，实际部署于 K8s 集群可观测性场景
-```
+| 组件 | 选型 | 理由 |
+|------|------|------|
+| 语言 | Go | SRE 领域主流语言，Prometheus/K8s 生态原生 |
+| 协议 | MCP (JSON-RPC 2.0) | Anthropic 开放标准，跨 LLM 通用 |
+| 指标 | Prometheus | CNCF 毕业项目，行业事实标准 |
+| 看板 | Grafana | 可观测性可视化事实标准 |
+| 日志 | Loki | 轻量级，与 Grafana 生态深度集成 |
+| 异常检测 | Z-score / IQR | 经典统计方法，可解释性强 |
+| 预测 | 线性回归 | 简单有效，适合容量趋势场景 |
+
+## 后续规划
+
+- [ ] 接入 Jaeger 实现 Traces 链路追踪（可观测性第三支柱）
+- [ ] 基于 OpenTelemetry 统一信号采集
+- [ ] 添加 K8s API 工具（Pod 状态 / 事件 / 日志）
+- [ ] Streamable HTTP 传输模式支持远程部署
+- [ ] 更多异常检测算法（EWMA / 动态阈值）
+- [ ] Web UI 管理面板
 
 ## License
 
