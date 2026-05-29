@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alerting-rules.yml"
+
+scrape_configs:
+  # Prometheus 自身指标（有大量内置 metrics 可以玩）
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Demo nginx（只做 up/down 检测）
+  - job_name: "demo-app"
+    metrics_path: /stub_status
+    static_configs:
+      - targets: ["demo-app:80"]
